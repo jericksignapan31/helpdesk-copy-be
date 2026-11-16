@@ -1,0 +1,289 @@
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, DataSource } from 'typeorm';
+import * as bcrypt from 'bcrypt';
+import { Employee } from '../entities/employee.entity';
+import { UserAccount } from '../entities/user-account.entity';
+import { CreateEmployeeDto } from './dto/create-employee.dto';
+import { UpdateEmployeeDto } from './dto/update-employee.dto';
+import { SecurityConfig } from '../common/config/security.config';
+
+@Injectable()
+export class EmployeeService {
+  constructor(
+    @InjectRepository(Employee)
+    private employeeRepository: Repository<Employee>,
+    @InjectRepository(UserAccount)
+    private userAccountRepository: Repository<UserAccount>,
+    private dataSource: DataSource,
+  ) {}
+
+  async create(createEmployeeDto: CreateEmployeeDto): Promise<Employee> {
+    // Auto-generate employee_id if not provided
+    let employeeId = createEmployeeDto.employee_id;
+    if (!employeeId) {
+      const { v4: uuidv4 } = require('uuid');
+      employeeId = uuidv4();
+      createEmployeeDto.employee_id = employeeId;
+    }
+
+    // Check if employee_id already exists
+    const existingEmployee = await this.employeeRepository.findOne({
+      where: { employee_id: employeeId },
+    });
+
+    if (existingEmployee) {
+      throw new ConflictException(
+        `Employee with ID ${employeeId} already exists`,
+      );
+    }
+
+    // Check if email already exists
+    const existingEmail = await this.employeeRepository.findOne({
+      where: { email: createEmployeeDto.email },
+    });
+
+    if (existingEmail) {
+      throw new ConflictException(
+        `Employee with email ${createEmployeeDto.email} already exists`,
+      );
+    }
+
+    // Check if email already exists in user_account
+    const existingUserAccount = await this.userAccountRepository.findOne({
+      where: { email: createEmployeeDto.email },
+    });
+
+    if (existingUserAccount) {
+      throw new ConflictException(
+        `Email ${createEmployeeDto.email} already has a user account`,
+      );
+    }
+
+    // Use transaction to create both employee and user account
+    const savedEmployee = await this.dataSource.transaction(async (manager) => {
+      // Create and save employee
+      const employee = manager.create(Employee, createEmployeeDto);
+      const savedEmployee = await manager.save(employee);
+
+      // Hash password (using employee_id as password)
+      const hashedPassword = await bcrypt.hash(
+        savedEmployee.employee_id,
+        SecurityConfig.password.saltRounds,
+      );
+
+      // Create user account with email and hashed password
+      const userAccount = new UserAccount();
+      userAccount.employee_id = savedEmployee.employee_id;
+      userAccount.email = savedEmployee.email;
+      userAccount.password = hashedPassword;
+      await manager.save(userAccount);
+
+      return savedEmployee;
+    });
+
+    // Return employee without circular relations to avoid serialization issues
+    const result = new Employee();
+    result.employee_id = savedEmployee.employee_id;
+    result.first_name = savedEmployee.first_name;
+    result.last_name = savedEmployee.last_name;
+    result.middle_name = savedEmployee.middle_name;
+    result.email = savedEmployee.email;
+    result.role = savedEmployee.role;
+    result.position = savedEmployee.position;
+    result.contact_number = savedEmployee.contact_number;
+    result.employment_status = savedEmployee.employment_status;
+    result.branch_id = savedEmployee.branch_id;
+    result.department_id = savedEmployee.department_id;
+    result.created_at = savedEmployee.created_at;
+    result.updated_at = savedEmployee.updated_at;
+
+    return result;
+  }
+
+  async findAll(
+    status?: 'active' | 'inactive' | 'pending',
+    branch_id?: string,
+  ): Promise<Employee[]> {
+    const queryBuilder = this.employeeRepository
+      .createQueryBuilder('employee')
+      .leftJoinAndSelect('employee.userAccount', 'userAccount')
+      .leftJoinAndSelect('employee.branch', 'branch')
+      .leftJoinAndSelect('employee.department', 'department')
+      .orderBy('employee.created_at', 'DESC');
+
+    // Filter by status
+    if (status === 'active') {
+      // Active: employment_status = true
+      queryBuilder.andWhere('employee.employment_status = :status', {
+        status: true,
+      });
+    } else if (status === 'inactive') {
+      // Inactive: employment_status = false (deactivated accounts)
+      queryBuilder.andWhere('employee.employment_status = :empStatus', {
+        empStatus: false,
+      });
+    } else if (status === 'pending') {
+      // Pending: employment_status = false (same as inactive, but frontend can differentiate by created date)
+      queryBuilder.andWhere('employee.employment_status = :empStatus', {
+        empStatus: false,
+      });
+    }
+
+    // Filter by branch
+    if (branch_id) {
+      queryBuilder.andWhere('employee.branch_id = :branch_id', { branch_id });
+    }
+
+    return await queryBuilder.getMany();
+  }
+
+  async findOne(employee_id: string): Promise<Employee> {
+    const employee = await this.employeeRepository.findOne({
+      where: { employee_id },
+      relations: ['branch', 'department', 'userAccount'],
+    });
+
+    if (!employee) {
+      throw new NotFoundException(`Employee with ID ${employee_id} not found`);
+    }
+
+    return employee;
+  }
+
+  async update(
+    employee_id: string,
+    updateEmployeeDto: UpdateEmployeeDto,
+  ): Promise<Employee> {
+    const employee = await this.findOne(employee_id);
+
+    // If email is being updated, check if it's already taken by another employee
+    if (updateEmployeeDto.email && updateEmployeeDto.email !== employee.email) {
+      const existingEmail = await this.employeeRepository.findOne({
+        where: { email: updateEmployeeDto.email },
+      });
+
+      if (existingEmail) {
+        throw new ConflictException(
+          `Employee with email ${updateEmployeeDto.email} already exists`,
+        );
+      }
+    }
+
+    Object.assign(employee, updateEmployeeDto);
+    return await this.employeeRepository.save(employee);
+  }
+
+  async updateEmploymentStatus(
+    employee_id: string,
+    employment_status: boolean,
+  ): Promise<Employee> {
+    const employee = await this.findOne(employee_id);
+
+    // Validate status is a boolean
+    if (typeof employment_status !== 'boolean') {
+      throw new NotFoundException(
+        'Invalid employment_status. Must be true or false',
+      );
+    }
+
+    employee.employment_status = employment_status;
+    return await this.employeeRepository.save(employee);
+  }
+
+  async verifyEmployee(employee_id: string): Promise<{ message: string }> {
+    const employee = await this.findOne(employee_id);
+
+    // Activate employee (this will automatically activate login access)
+    employee.employment_status = true;
+    await this.employeeRepository.save(employee);
+
+    return {
+      message: `Employee ${employee_id} has been verified and activated successfully`,
+    };
+  }
+
+  async remove(employee_id: string): Promise<void> {
+    const employee = await this.findOne(employee_id);
+
+    // Delete user account first (FK constraint)
+    await this.userAccountRepository.delete({
+      employee_id: employee_id,
+    });
+
+    // Delete related assets assignments (cascade)
+    const result = await this.employeeRepository.query(
+      `UPDATE "asset" SET assigned_to = NULL WHERE assigned_to = $1`,
+      [employee_id],
+    );
+
+    console.log(`ℹ️  Cleared asset assignments for employee: ${employee_id}`);
+
+    // Finally delete the employee
+    await this.employeeRepository.remove(employee);
+    console.log(`✅ Employee deleted successfully: ${employee_id}`);
+  }
+
+  async search(searchTerm: string): Promise<Employee[]> {
+    return await this.employeeRepository
+      .createQueryBuilder('employee')
+      .where(
+        'employee.first_name LIKE :search OR employee.last_name LIKE :search OR employee.email LIKE :search',
+        { search: `%${searchTerm}%` },
+      )
+      .getMany();
+  }
+
+  async findByBranch(branch_id: string): Promise<Employee[]> {
+    return await this.employeeRepository.find({
+      where: {
+        branch_id,
+        employment_status: true, // Only active employees
+      },
+      relations: ['branch', 'department'],
+      order: {
+        first_name: 'ASC',
+      },
+    });
+  }
+
+  async resetPasswordByAdmin(
+    employee_id: string,
+  ): Promise<{ message: string; defaultPassword: string }> {
+    // Find employee
+    const employee = await this.findOne(employee_id);
+
+    // Find user account
+    const userAccount = await this.userAccountRepository.findOne({
+      where: { employee_id },
+    });
+
+    if (!userAccount) {
+      throw new NotFoundException(
+        `User account for employee ${employee_id} not found`,
+      );
+    }
+
+    // Generate default password: {employee_id}@{last_name}
+    const defaultPassword = `${employee_id}@${employee.last_name}`;
+
+    // Hash the default password
+    const hashedPassword = await bcrypt.hash(
+      defaultPassword,
+      SecurityConfig.password.saltRounds,
+    );
+
+    // Update user account password
+    userAccount.password = hashedPassword;
+    await this.userAccountRepository.save(userAccount);
+
+    return {
+      message: `Password reset successfully for employee ${employee_id}`,
+      defaultPassword: defaultPassword,
+    };
+  }
+}

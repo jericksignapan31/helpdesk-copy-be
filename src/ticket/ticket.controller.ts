@@ -1,0 +1,430 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiResponse,
+  ApiParam,
+} from '@nestjs/swagger';
+import { TicketService } from './ticket.service';
+import { CreateTicketDto } from './dto/create-ticket.dto';
+import { UpdateTicketDto } from './dto/update-ticket.dto';
+import { ApproveTicketDto } from './dto/approve-ticket.dto';
+import { RejectTicketDto } from './dto/reject-ticket.dto';
+import { StartWorkDto } from './dto/start-work.dto';
+import { CompleteTicketDto } from './dto/complete-ticket.dto';
+import { ResumeFromHoldDto } from './dto/resume-from-hold.dto';
+import { CreateTicketPartsDto } from './dto/create-ticket-parts.dto';
+import { UpdateTicketPartsDto } from './dto/update-ticket-parts.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { UserRole } from '../common/enums/user-role.enum';
+import { TicketPartsService } from './ticket-parts.service';
+
+@ApiTags('tickets')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+@Controller('tickets')
+export class TicketController {
+  constructor(
+    private readonly ticketService: TicketService,
+    private readonly ticketPartsService: TicketPartsService,
+  ) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Create a new repair request ticket' })
+  @ApiResponse({ status: 201, description: 'Ticket created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid input data' })
+  create(@Body() createTicketDto: CreateTicketDto, @CurrentUser() user: any) {
+    // Automatically set the reporter as the logged-in user
+    createTicketDto.employee_id = user.employee_id;
+    return this.ticketService.create(createTicketDto);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Get all tickets (filtered by department for employee/supervisor)' })
+  findAll(@CurrentUser() user: any, @Query('department_id') departmentId?: string) {
+    return this.ticketService.findAll(user, departmentId);
+  }
+
+  @Get('search')
+  @ApiOperation({
+    summary: 'Search tickets by subject, description, or category',
+  })
+  search(@CurrentUser() user: any, @Query('q') query: string, @Query('department_id') departmentId?: string) {
+    return this.ticketService.search(user, query, departmentId);
+  }
+
+  @Get('reporter/:employee_id')
+  @ApiOperation({ summary: 'Get tickets reported by a specific employee' })
+  findByReporter(@Param('employee_id') employee_id: string) {
+    return this.ticketService.findByReporter(employee_id);
+  }
+
+  @Get('assignee/:employee_id')
+  @ApiOperation({ summary: 'Get tickets assigned to a specific employee' })
+  findByAssignee(@Param('employee_id') employee_id: string) {
+    return this.ticketService.findByAssignee(employee_id);
+  }
+
+  @Get('status/:status')
+  @ApiOperation({ summary: 'Get tickets by status (filtered by department for employee/supervisor)' })
+  findByStatus(@CurrentUser() user: any, @Param('status') status: string, @Query('department_id') departmentId?: string) {
+    return this.ticketService.findByStatus(user, status, departmentId);
+  }
+
+  @Get('priority/:priority')
+  @ApiOperation({ summary: 'Get tickets by priority (filtered by department for employee/supervisor)' })
+  findByPriority(@CurrentUser() user: any, @Param('priority') priority: string, @Query('department_id') departmentId?: string) {
+    return this.ticketService.findByPriority(user, priority, departmentId);
+  }
+
+  @Get('category/:category')
+  @ApiOperation({ summary: 'Get tickets by category (filtered by department for employee/supervisor)' })
+  findByCategory(@CurrentUser() user: any, @Param('category') category: string, @Query('department_id') departmentId?: string) {
+    return this.ticketService.findByCategory(user, category, departmentId);
+  }
+
+  @Get('pending')
+  @ApiOperation({ summary: 'Get all pending approval tickets (status: pending_approval, filtered by department)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all tickets with pending_approval status',
+  })
+  findPending(@CurrentUser() user: any) {
+    return this.ticketService.findPending(user);
+  }
+
+  @Get('in-progress')
+  @ApiOperation({ summary: 'Get all in-progress tickets (filtered by department for employee/supervisor)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all tickets with in_progress status',
+  })
+  findInProgress(@CurrentUser() user: any) {
+    return this.ticketService.findInProgress(user);
+  }
+
+  @Get('completed')
+  @ApiOperation({ summary: 'Get all resolved/completed tickets (status: resolved, filtered by department)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all tickets with resolved status',
+  })
+  findCompleted(@CurrentUser() user: any) {
+    return this.ticketService.findCompleted(user);
+  }
+
+  @Get('approved')
+  @ApiOperation({ summary: 'Get all approved tickets (status: approved, filtered by department)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all tickets with approved status',
+  })
+  findApproved(@CurrentUser() user: any) {
+    return this.ticketService.findApproved(user);
+  }
+
+  @Get('assigned')
+  @ApiOperation({ summary: 'Get all assigned tickets (status: assigned, filtered by department)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all tickets with assigned status',
+  })
+  findAssigned(@CurrentUser() user: any) {
+    return this.ticketService.findAssigned(user);
+  }
+
+  @Get('rejected')
+  @ApiOperation({ summary: 'Get all rejected tickets (status: rejected, filtered by department)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all tickets with rejected status',
+  })
+  findRejected(@CurrentUser() user: any) {
+    return this.ticketService.findRejected(user);
+  }
+
+  @Get('hold')
+  @ApiOperation({ summary: 'Get all on-hold tickets (status: hold, filtered by department) - tickets waiting for parts' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all tickets on hold (waiting for parts)',
+  })
+  findHold(@CurrentUser() user: any) {
+    return this.ticketService.findWaitingForParts(user);
+  }
+
+  @Get('waiting-for-parts')
+  @ApiOperation({ summary: 'Get all tickets on hold for parts (status: hold, filtered by department)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all hold tickets with their parts',
+  })
+  findWaitingForParts(@CurrentUser() user: any) {
+    return this.ticketService.findWaitingForParts(user);
+  }
+
+  @Get('pending-approvals')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.ADMIN, UserRole.WAREHOUSE)
+  @ApiOperation({ summary: 'Get all tickets pending approval (filtered by department for supervisor/warehouse)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all tickets pending supervisor approval',
+  })
+  findPendingApprovals(@CurrentUser() user: any, @Query('department_id') departmentId?: string) {
+    return this.ticketService.findPendingApprovals(user, departmentId);
+  }
+
+  @Get('approval-status/:status')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.ADMIN, UserRole.WAREHOUSE)
+  @ApiOperation({ summary: 'Get tickets by approval status (filtered by department for supervisor/warehouse)' })
+  @ApiParam({ name: 'status', enum: ['pending', 'approved', 'rejected'] })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns tickets with specified approval status',
+  })
+  findByApprovalStatus(@CurrentUser() user: any, @Param('status') status: string, @Query('department_id') departmentId?: string) {
+    return this.ticketService.findByApprovalStatus(user, status, departmentId);
+  }
+
+  @Patch(':id/approve')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.ADMIN, UserRole.WAREHOUSE)
+  @ApiOperation({ summary: 'Approve a ticket (Supervisor/Warehouse/Admin)' })
+  @ApiParam({ name: 'id', description: 'Ticket ID' })
+  @ApiResponse({ status: 200, description: 'Ticket approved successfully' })
+  @ApiResponse({ status: 400, description: 'Ticket is not in pending status' })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
+  approve(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() approveTicketDto: ApproveTicketDto,
+  ) {
+    return this.ticketService.approveTicket(
+      id,
+      user.employee_id,
+      approveTicketDto,
+    );
+  }
+
+  @Patch(':id/reject')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Reject a ticket (Supervisor only)' })
+  @ApiParam({ name: 'id', description: 'Ticket ID' })
+  @ApiResponse({ status: 200, description: 'Ticket rejected successfully' })
+  @ApiResponse({ status: 400, description: 'Ticket is not in pending status' })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
+  reject(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() rejectTicketDto: RejectTicketDto,
+  ) {
+    return this.ticketService.rejectTicket(
+      id,
+      user.employee_id,
+      rejectTicketDto,
+    );
+  }
+
+  @Patch(':id/start-work')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.IT, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Start working on a ticket (IT Staff only)' })
+  @ApiParam({ name: 'id', description: 'Ticket ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Started working on ticket successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Ticket is not in assigned/approved status or not assigned to you',
+  })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
+  startWork(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() startWorkDto: StartWorkDto,
+  ) {
+    return this.ticketService.startWork(id, user.employee_id, startWorkDto);
+  }
+
+  @Patch(':id/complete')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.IT, UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Complete a ticket with resolution details (IT Staff only)',
+  })
+  @ApiParam({ name: 'id', description: 'Ticket ID' })
+  @ApiResponse({ status: 200, description: 'Ticket completed successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'Ticket is not in progress or not assigned to you',
+  })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
+  complete(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() completeTicketDto: CompleteTicketDto,
+  ) {
+    return this.ticketService.completeTicket(
+      id,
+      user.employee_id,
+      completeTicketDto,
+    );
+  }
+
+  @Patch(':id/resume-from-hold')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.IT, UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Resume work on a ticket from hold status (IT Staff only)',
+  })
+  @ApiParam({ name: 'id', description: 'Ticket ID' })
+  @ApiResponse({ status: 200, description: 'Ticket resumed from hold successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'Ticket is not on hold or not assigned to you',
+  })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
+  resumeFromHold(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() resumeFromHoldDto: ResumeFromHoldDto,
+  ) {
+    return this.ticketService.resumeFromHold(
+      id,
+      user.employee_id,
+      resumeFromHoldDto,
+    );
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a ticket by ID' })
+  findOne(@Param('id') id: string) {
+    return this.ticketService.findOne(id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update a ticket' })
+  update(@Param('id') id: string, @Body() updateTicketDto: UpdateTicketDto) {
+    return this.ticketService.update(id, updateTicketDto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a ticket' })
+  remove(@Param('id') id: string) {
+    return this.ticketService.remove(id);
+  }
+
+  // ============ PARTS MANAGEMENT ENDPOINTS ============
+
+  @Get(':id/parts')
+  @ApiOperation({ summary: 'Get all parts requested for a ticket' })
+  @ApiParam({ name: 'id', description: 'Ticket ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all parts for the ticket',
+  })
+  getTicketParts(@Param('id') ticket_id: string) {
+    return this.ticketPartsService.findAllPartsForTicket(ticket_id);
+  }
+
+  @Post(':id/parts')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.IT, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Request parts for a ticket (IT Staff only)' })
+  @ApiParam({ name: 'id', description: 'Ticket ID' })
+  @ApiResponse({ status: 201, description: 'Part request created' })
+  @ApiResponse({ status: 400, description: 'Invalid input or validation error' })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
+  createPart(
+    @Param('id') ticket_id: string,
+    @Body() createTicketPartsDto: CreateTicketPartsDto,
+  ) {
+    return this.ticketPartsService.createPart(ticket_id, createTicketPartsDto);
+  }
+
+  @Patch(':id/parts/:part_id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.IT, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Update part status (IT Staff only)' })
+  @ApiParam({ name: 'id', description: 'Ticket ID' })
+  @ApiParam({ name: 'part_id', description: 'Part ID' })
+  @ApiResponse({ status: 200, description: 'Part updated' })
+  @ApiResponse({ status: 404, description: 'Part not found' })
+  updatePart(
+    @Param('part_id') part_id: string,
+    @Body() updateTicketPartsDto: UpdateTicketPartsDto,
+  ) {
+    return this.ticketPartsService.updatePart(part_id, updateTicketPartsDto);
+  }
+
+  @Delete(':id/parts/:part_id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.IT, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Delete a part request (IT Staff only)' })
+  @ApiParam({ name: 'id', description: 'Ticket ID' })
+  @ApiParam({ name: 'part_id', description: 'Part ID' })
+  @ApiResponse({ status: 200, description: 'Part deleted' })
+  @ApiResponse({ status: 404, description: 'Part not found' })
+  deletePart(@Param('part_id') part_id: string) {
+    return this.ticketPartsService.deletePart(part_id);
+  }
+
+  // ============ PARTS INVENTORY ENDPOINTS ============
+
+  @Get('inventory/all')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.IT, UserRole.ADMIN, UserRole.WAREHOUSE)
+  @ApiOperation({ summary: 'Get all requested parts across all tickets (IT/Warehouse/Admin)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all parts requested, ordered by most recent first',
+  })
+  getAllParts() {
+    return this.ticketPartsService.getAllParts();
+  }
+
+  @Get('inventory/status/:status')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.IT, UserRole.ADMIN, UserRole.WAREHOUSE)
+  @ApiOperation({ summary: 'Get all parts by status (IT/Warehouse/Admin)' })
+  @ApiParam({ name: 'status', enum: ['pending', 'ordered', 'received'] })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns parts with specified status',
+  })
+  getPartsByStatus(@Param('status') status: string) {
+    return this.ticketPartsService.getPartsByStatus(status);
+  }
+
+  @Get('inventory/supplier/:supplier')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.IT, UserRole.ADMIN, UserRole.WAREHOUSE)
+  @ApiOperation({ summary: 'Get all parts from a specific supplier (IT/Warehouse/Admin)' })
+  @ApiParam({ name: 'supplier', description: 'Supplier name' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns parts from specified supplier',
+  })
+  getPartsBySupplier(@Param('supplier') supplier: string) {
+    return this.ticketPartsService.getPartsBySupplier(supplier);
+  }
+}

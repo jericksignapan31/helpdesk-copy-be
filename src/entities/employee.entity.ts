@@ -1,0 +1,71 @@
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToOne,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { UserAccount } from './user-account.entity';
+import { Branch } from './branch.entity';
+import { Department } from './department.entity';
+import { UserRole } from '../common/enums/user-role.enum';
+
+@Entity('employee')
+export class Employee {
+  @PrimaryGeneratedColumn('uuid')
+  employee_id!: string;
+
+  @Column('uuid', { nullable: true })
+  branch_id?: string;
+
+  @Column('uuid', { nullable: true })
+  department_id?: string;
+
+  @Column()
+  first_name!: string;
+
+  @Column()
+  last_name!: string;
+
+  @Column({ nullable: true })
+  middle_name?: string;
+
+  @Column({ unique: true })
+  email!: string;
+
+  @Column({
+    type: 'varchar',
+    enum: UserRole,
+    default: UserRole.EMPLOYEE,
+  })
+  role!: UserRole;
+
+  @Column({ nullable: true })
+  position?: string;
+
+  @Column({ nullable: true })
+  contact_number?: string;
+
+  @Column({ type: 'boolean', default: true })
+  employment_status!: boolean;
+
+  @ManyToOne(() => Branch, (branch) => branch.employees)
+  @JoinColumn({ name: 'branch_id' })
+  branch?: Branch;
+
+  @ManyToOne(() => Department, (department) => department.employees)
+  @JoinColumn({ name: 'department_id' })
+  department?: Department;
+
+  @OneToOne(() => UserAccount, (userAccount) => userAccount.employee)
+  userAccount?: UserAccount;
+
+  @CreateDateColumn()
+  created_at!: Date;
+
+  @UpdateDateColumn()
+  updated_at!: Date;
+}

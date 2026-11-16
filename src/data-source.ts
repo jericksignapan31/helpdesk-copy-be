@@ -1,0 +1,66 @@
+import { DataSource } from 'typeorm';
+import { config } from 'dotenv';
+import { Employee } from './entities/employee.entity';
+import { UserAccount } from './entities/user-account.entity';
+import { Branch } from './entities/branch.entity';
+import { Department } from './entities/department.entity';
+import { Brand } from './entities/brand.entity';
+import { Asset } from './entities/asset.entity';
+import { Ticket } from './entities/ticket.entity';
+import { TicketParts } from './entities/ticket-parts.entity';
+import { TicketSequence } from './entities/ticket-sequence.entity';
+import { WarehousePartRequest } from './entities/warehouse-part-request.entity';
+import { PartRequisition } from './entities/part-requisition.entity';
+import { RequisitionItem } from './entities/requisition-item.entity';
+import { RequisitionReturn } from './entities/requisition-return.entity';
+import { RequisitionComment } from './entities/requisition-comment.entity';
+import { RepairLog } from './entities/repair-log.entity';
+import { Message } from './chat/entities/message.entity';
+import { Conversation } from './chat/entities/conversation.entity';
+import { FileAttachment } from './chat/entities/file-attachment.entity';
+import { ChatbotKnowledge } from './chat/entities/chatbot-knowledge.entity';
+import { ChatbotInteraction } from './chat/entities/chatbot-interaction.entity';
+import { TicketSolution } from './chat/entities/ticket-solution.entity';
+
+// Load environment variables
+config({ path: '.env' });
+
+export const AppDataSource = new DataSource({
+  type: 'postgres',
+  host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT || '5432', 10),
+  username: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_DATABASE,
+  entities: [
+    Employee,
+    UserAccount,
+    Branch,
+    Department,
+    Brand,
+    Asset,
+    Ticket,
+    TicketParts,
+    TicketSequence,
+    WarehousePartRequest,
+    PartRequisition,
+    RequisitionItem,
+    RequisitionReturn,
+    RequisitionComment,
+    RepairLog,
+    Message,
+    Conversation,
+    FileAttachment,
+    ChatbotKnowledge,
+    ChatbotInteraction,
+    TicketSolution,
+  ],
+  migrations: ['dist/src/migrations/*.js'],
+  synchronize: false,
+  logging: ['query', 'error', 'warn'],
+  migrationsRun: true, // Automatically run migrations on startup
+  ssl:
+    process.env.DB_SSL === 'true'
+      ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true' }
+      : undefined,
+});
