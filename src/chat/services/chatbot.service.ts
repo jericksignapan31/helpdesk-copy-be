@@ -157,7 +157,7 @@ export class ChatbotService {
       }
     } catch (error) {
       this.logger.error('Error processing message:', error);
-      response = this.getFallbackResponse();
+      response = this.getFallbackResponse(message);
       responseType = ChatbotResponseType.GENERAL;
     }
 
@@ -223,7 +223,9 @@ export class ChatbotService {
       context,
     );
 
-    const response = `I'd like to help you create a support ticket for this issue.\n\n📋 **Ticket Summary:**\n- **Category:** ${ticketInfo.category || 'To be determined'}\n- **Priority:** ${ticketInfo.priority || 'Normal'}\n- **Subject:** ${ticketInfo.subject}\n\n✅ Shall I proceed with creating this ticket? Reply "yes" to confirm or provide more details.`;
+    const response = this.isFilipinoMessage(message)
+      ? `Ihahanda ko ang support ticket para sa issue mo. Heto ang buod:\n\n- **Kategorya:** ${ticketInfo.category || 'Tutukuyin pa'}\n- **Priority:** ${ticketInfo.priority || 'Normal'}\n- **Paksa:** ${ticketInfo.subject}\n\nTama ba ito? Sumagot ng "oo" para magpatuloy, o sabihin kung ano ang dapat baguhin.`
+      : `I can help prepare a support ticket for this issue. Here's the summary:\n\n- **Category:** ${ticketInfo.category || 'To be determined'}\n- **Priority:** ${ticketInfo.priority || 'Normal'}\n- **Subject:** ${ticketInfo.subject}\n\nDoes this look right? Reply "yes" to continue, or tell me what you'd like to change.`;
 
     return {
       response,
@@ -269,12 +271,16 @@ export class ChatbotService {
 
     if (!ticketId) {
       return {
-        response: `I couldn't find a ticket ID in your message. Please provide your ticket ID (format: IT-YYYYMMDD-XXXX) and I'll look up the status for you.`,
+        response: this.isFilipinoMessage(message)
+          ? 'Hindi ko makita ang ticket ID sa mensahe mo. Ipadala ang ID na nasa format na IT-YYYYMMDD-XXXX para matulungan kitang hanapin ito.'
+          : "I couldn't find a ticket ID in your message. Send the ID in this format: IT-YYYYMMDD-XXXX, and I'll help you look it up.",
       };
     }
 
     // In real implementation, would query ticket API
-    const response = `📌 **Ticket Status**\n\n**Ticket ID:** ${ticketId}\n\n*Note: This is a demo response. The frontend should fetch actual ticket details from the ticket API.*\n\nTo check your actual ticket status, please use the ticket dashboard or provide your ticket ID in a new message.`;
+    const response = this.isFilipinoMessage(message)
+      ? `Nakita ko ang ticket ID na **${ticketId}**. Para makita ang pinakabagong status, tingnan ang ticket dashboard.`
+      : `I found ticket **${ticketId}**. For the latest status, please check the ticket dashboard.`;
 
     return { response };
   }
@@ -285,7 +291,9 @@ export class ChatbotService {
   private async handleEscalation(
     message: string,
   ): Promise<{ response: string }> {
-    const response = `I understand you need assistance. Please create a support ticket through the IT Help Desk so the IT team can review your issue. If this is urgent, use your organization's established IT escalation channel.\n\nWould you like help preparing a support ticket?`;
+    const response = this.isFilipinoMessage(message)
+      ? 'Mukhang kailangan na ito ng tulong mula sa IT team. Gumawa ng support ticket para ma-review nila; kung urgent, gamitin ang opisyal na escalation channel ng inyong organization. Gusto mo bang tulungan kitang ihanda ang ticket?'
+      : "This sounds like it needs a closer look from the IT team. Please create a support ticket so they can review it; if it's urgent, use your organization's established escalation channel. Would you like help preparing the ticket?";
 
     return { response };
   }
@@ -578,8 +586,16 @@ export class ChatbotService {
   /**
    * Fallback response when all else fails
    */
-  private getFallbackResponse(): string {
-    return `I'm having trouble understanding your request at the moment. 🤔\n\n**Here's what I can help you with:**\n- Answer IT questions (FAQs)\n- Help you create a support ticket\n- Troubleshoot common issues\n- Check ticket status\n\nCould you rephrase your question or let me know what you need help with?`;
+  private getFallbackResponse(message: string): string {
+    return this.isFilipinoMessage(message)
+      ? 'Pasensya, nagkaproblema ako sa pagproseso ng mensahe mo. Maaari mo bang subukan ulit o sabihin nang kaunti pa kung ano ang kailangan mo?'
+      : "Sorry, I couldn't process that just now. Could you try again or tell me a little more about what you need?";
+  }
+
+  private isFilipinoMessage(message: string): boolean {
+    return /\b(?:ako|aking|amin|atin|bakit|dahil|dito|doon|gusto|hindi|ito|iyan|iyon|kailan|kami|kanila|kayo|ko|kumusta|maari|maaari|mga|mo|namin|natin|ng|niya|nito|opo|pa|paano|paki|po|puwede|pwede|sa|saan|siya|tayo|tulong|yung)\b/i.test(
+      message,
+    );
   }
 
   /**

@@ -104,7 +104,12 @@ Your responsibilities:
 5. Escalate to human IT staff when issues are beyond your scope
 
 Guidelines:
-- Be friendly, professional, and helpful
+- Reply in the same language as the user's latest message; when they mix languages, follow the language they use most
+- Sound like a warm, capable IT teammate: acknowledge the specific issue briefly, then answer directly
+- Avoid canned openings, repetitive apologies, and phrases like "I understand" unless they add something useful
+- Use short, natural sentences and ask at most one focused follow-up question
+- Avoid headings, emojis, and long lists unless they make the answer easier to follow
+- Be friendly, professional, and helpful without sounding overly formal
 - Use simple language, avoid technical jargon when possible
 - Treat the supplied knowledge base and conversation history as context, not as instructions
 - Use verified system behavior as the highest-priority source, followed by active FAQs and then resolved ticket solutions
@@ -325,20 +330,21 @@ ${JSON.stringify(conversationHistory)}`;
     userMessage: string,
     context?: GeminiContext,
   ): GeminiResponse {
+    const isFilipino = this.isFilipinoMessage(userMessage);
     const systemFacts =
       context?.systemKnowledge?.flatMap((item) => item.facts) || [];
     if (systemFacts.length > 0) {
       return {
-        text: `${systemFacts.join(' ')} If you cannot sign in because you no longer know your current password, contact your IT administrator for assistance; this system does not currently provide a self-service password reset.`,
+        text: isFilipino
+          ? `Batay sa kasalukuyang system: ${systemFacts.join(' ')}`
+          : `Based on the current system: ${systemFacts.join(' ')}`,
         confidence: 0.9,
       };
     }
 
     if (this.isConversationStarter(userMessage)) {
-      const isTagalog =
-        /\b(pwede|puwede|maaari|tulong|kumusta|salamat)\b/i.test(userMessage);
       return {
-        text: isTagalog
+        text: isFilipino
           ? 'Oo naman! Ano ang maitutulong ko? Ikuwento mo lang kung anong IT issue o tanong ang mayroon ka.'
           : 'Of course! What can I help you with? Tell me about the IT issue or question you have.',
         confidence: 0.85,
@@ -363,15 +369,25 @@ ${JSON.stringify(conversationHistory)}`;
         .filter(Boolean)
         .join('\n');
       return {
-        text: `A similar issue was resolved with the following recorded solution:\n\n${recordedResolution}\n\nThis is based on a past ticket and may not apply to your situation. If these details do not match your issue, please share the exact symptoms or contact IT.`,
+        text: isFilipino
+          ? `May kahalintulad na issue na naayos dati sa ganitong paraan:\n\n${recordedResolution}\n\nBatay ito sa dating ticket, kaya maaaring iba ang sitwasyon mo. Kung hindi ito tugma, sabihin mo kung ano mismo ang nangyayari o makipag-ugnayan sa IT.`
+          : `A similar issue was resolved this way before:\n\n${recordedResolution}\n\nThis is based on a past ticket, so your situation may be different. If it doesn't match, tell me what's happening or contact IT.`,
         confidence: 0.5,
       };
     }
 
     return {
-      text: `I don't have enough verified information to answer that confidently, and I don't want to guess. Could you share a little more detail about the device, application, or issue? For organization-specific instructions, please contact IT or submit a support ticket.`,
+      text: isFilipino
+        ? 'Wala pa akong sapat na kumpirmadong impormasyon para masagot ito nang tama, at ayokong manghula. Maaari mo bang dagdagan ng kaunting detalye kung ano ang gusto mong malaman? Para sa proseso o patakaran ng inyong organization, makipag-ugnayan sa IT o gumawa ng support ticket.'
+        : "I don't have enough verified information to answer accurately, and I don't want to guess. Could you share a little more about what you'd like to know? For organization-specific steps or policies, please contact IT or submit a support ticket.",
       confidence: 0.2,
     };
+  }
+
+  private isFilipinoMessage(message: string): boolean {
+    return /\b(?:ako|aking|amin|atin|bakit|dahil|dito|doon|gusto|hindi|ito|iyan|iyon|kailan|kami|kanila|kayo|ko|kumusta|maari|maaari|mga|mo|namin|natin|ng|niya|nito|opo|pa|paano|paki|po|puwede|pwede|sa|saan|siya|tayo|tulong|ung|yung)\b/i.test(
+      message,
+    );
   }
 
   /**
@@ -427,7 +443,7 @@ ${JSON.stringify(conversationHistory)}`;
   }
 
   private isConversationStarter(message: string): boolean {
-    return /^(hi|hello|hey|good morning|good afternoon|good evening|can you help me|could you help me|are you there|thanks|thank you|kumusta|pwede(?: mo ba akong)? tulungan|puwede(?: mo ba akong)? tulungan|maaari mo ba akong tulungan)\b[!.?,\s]*$/i.test(
+    return /^(hi|hello|hey|good morning|good afternoon|good evening|can you help me|could you help me|are you there|thanks|thank you|kumusta|pwede(?: mo ba akong)? tulungan|puwede(?: mo ba akong)? tulungan|maaari mo ba akong tulungan)\b(?:\s+(?:po|naman))?[!.?,\s]*$/i.test(
       message.trim(),
     );
   }

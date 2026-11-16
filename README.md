@@ -52,7 +52,9 @@ PORT=3000
 
 For local development, TypeORM creates the schema from the current entities.
 Do not use this synchronization setting with production or a database containing
-data. The legacy `database-schema.sql` does not match the current entities.
+data. The root `database-schema.sql` contains the schema only (no records) for
+all 24 application tables. Run it only against a new, empty PostgreSQL database;
+it includes the `uuid-ossp` extension required by the schema.
 
 ## Compile and run the project
 

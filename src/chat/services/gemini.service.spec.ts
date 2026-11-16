@@ -36,4 +36,37 @@ describe('GeminiService conversational fallback', () => {
 
     expect(response.text).toContain('Oo naman!');
   });
+
+  it('uses a natural Filipino fallback for a Filipino IT question', async () => {
+    const service = createUnavailableService();
+
+    const response = await service.generateResponse(
+      'Paano ko maaayos ang problema ko?',
+    );
+
+    expect(response.text).toContain('Wala pa akong sapat na kumpirmadong impormasyon');
+    expect(response.text).not.toContain('I do not have enough');
+  });
+
+  it('keeps verified system facts focused on the user question', async () => {
+    const service = createUnavailableService();
+
+    const response = await service.generateResponse(
+      'Paano gumagana ang password change?',
+      {
+        systemKnowledge: [
+          {
+            topic: 'Password change',
+            source: 'auth',
+            facts: ['Kailangan ang kasalukuyang password para magpalit.'],
+          },
+        ],
+      },
+    );
+
+    expect(response.text).toContain(
+      'Kailangan ang kasalukuyang password para magpalit.',
+    );
+    expect(response.text).not.toContain('contact your IT administrator');
+  });
 });

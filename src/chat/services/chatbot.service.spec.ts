@@ -241,4 +241,28 @@ describe('ChatbotService grounded responses', () => {
       }),
     );
   });
+
+  it('uses a natural Filipino confirmation when preparing a ticket', async () => {
+    const { service, geminiService } = createService({
+      intent: { intent: 'TICKET_CREATION', confidence: 0.9 },
+    });
+    geminiService.extractTicketInfo.mockResolvedValue({
+      category: 'Software',
+      priority: 'Normal',
+      subject: 'Hindi gumagana ang email',
+      description: 'Hindi mabuksan ang email app.',
+    });
+
+    const reply = await service.handleMessage({
+      user_id: userId,
+      conversation_id: conversationId,
+      message: 'Pwede mo ba akong gawan ng ticket? Hindi gumagana ang email.',
+    });
+
+    expect(reply.response).toContain(
+      'Ihahanda ko ang support ticket para sa issue mo.',
+    );
+    expect(reply.response).toContain('Sumagot ng "oo" para magpatuloy');
+    expect(reply.response).not.toContain('Shall I proceed');
+  });
 });
