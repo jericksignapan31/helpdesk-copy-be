@@ -12,8 +12,8 @@ import { Branch } from './branch.entity';
 import { UserAccount } from './user-account.entity';
 
 @Entity('asset_movement_history')
-@Index('asset_id')
-@Index('created_at')
+@Index('idx_asset_movement_history_asset_id', ['asset_id'])
+@Index('idx_asset_movement_history_created_at', ['created_at'])
 export class AssetMovementHistory {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

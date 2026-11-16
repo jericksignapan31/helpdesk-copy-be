@@ -91,7 +91,8 @@ import { WarehouseModule } from './warehouse/warehouse.module';
           TicketSolution,
         ],
         migrations: ['dist/migrations/*.js'],
-        migrationsRun: true,
+        migrationsRun:
+          configService.get<string>('DB_MIGRATIONS_RUN') !== 'false',
         synchronize: configService.get<string>('DB_SYNCHRONIZE') === 'true',
         logging: ['error', 'warn', 'query'],
         ssl:

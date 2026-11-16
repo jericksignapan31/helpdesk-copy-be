@@ -28,8 +28,31 @@
 ## Project setup
 
 ```bash
-$ npm install
+$ npm ci
 ```
+
+## Local PostgreSQL setup
+
+Create a new, empty PostgreSQL database for local development, then configure
+the root `.env` file with the connection details:
+
+```env
+DB_TYPE=postgres
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_USERNAME=postgres
+DB_PASSWORD=your-local-postgres-password
+DB_DATABASE=ithelp_desk_dev
+DB_SYNCHRONIZE=true
+DB_MIGRATIONS_RUN=false
+DB_SSL=false
+JWT_SECRET=your-long-random-local-secret
+PORT=3000
+```
+
+For local development, TypeORM creates the schema from the current entities.
+Do not use this synchronization setting with production or a database containing
+data. The legacy `database-schema.sql` does not match the current entities.
 
 ## Compile and run the project
 

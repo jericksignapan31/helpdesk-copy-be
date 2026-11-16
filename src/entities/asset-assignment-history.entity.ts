@@ -12,8 +12,8 @@ import { Employee } from './employee.entity';
 import { UserAccount } from './user-account.entity';
 
 @Entity('asset_assignment_history')
-@Index('asset_id')
-@Index('created_at')
+@Index('idx_asset_assignment_history_asset_id', ['asset_id'])
+@Index('idx_asset_assignment_history_created_at', ['created_at'])
 export class AssetAssignmentHistory {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

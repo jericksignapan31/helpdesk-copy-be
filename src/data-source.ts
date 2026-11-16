@@ -56,9 +56,9 @@ export const AppDataSource = new DataSource({
     TicketSolution,
   ],
   migrations: ['dist/src/migrations/*.js'],
-  synchronize: false,
+  synchronize: process.env.DB_SYNCHRONIZE === 'true',
   logging: ['query', 'error', 'warn'],
-  migrationsRun: true, // Automatically run migrations on startup
+  migrationsRun: process.env.DB_MIGRATIONS_RUN !== 'false',
   ssl:
     process.env.DB_SSL === 'true'
       ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true' }

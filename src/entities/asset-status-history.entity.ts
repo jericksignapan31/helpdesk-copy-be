@@ -11,8 +11,8 @@ import { Asset } from './asset.entity';
 import { UserAccount } from './user-account.entity';
 
 @Entity('asset_status_history')
-@Index('asset_id')
-@Index('created_at')
+@Index('idx_asset_status_history_asset_id', ['asset_id'])
+@Index('idx_asset_status_history_created_at', ['created_at'])
 export class AssetStatusHistory {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
