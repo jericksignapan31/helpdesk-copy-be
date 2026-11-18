@@ -154,7 +154,7 @@ When escalating:
       // Build context-aware prompt
       const contextPrompt = this.buildContextPrompt(userMessage, context);
 
-      const result = await this.model.generateContent(contextPrompt);
+      const result = await this.generateContentWithRetry(contextPrompt);
       const response = result.response;
       const text = response.text();
 
@@ -203,7 +203,7 @@ Respond ONLY in this JSON format (no markdown, no extra text):
   "reasoning": "brief explanation"
 }`;
 
-      const result = await this.model.generateContent(intentPrompt);
+      const result = await this.generateContentWithRetry(intentPrompt);
       const responseText = result.response.text();
 
       // Parse JSON response
@@ -257,7 +257,7 @@ Respond ONLY in this JSON format (no markdown, no extra text):
 
 If any field cannot be determined, use null.`;
 
-      const result = await this.model.generateContent(extractPrompt);
+      const result = await this.generateContentWithRetry(extractPrompt);
       const responseText = result.response.text();
 
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
@@ -331,6 +331,15 @@ ${JSON.stringify(conversationHistory)}`;
     context?: GeminiContext,
   ): GeminiResponse {
     const isFilipino = this.isFilipinoMessage(userMessage);
+    if (this.isIdentityQuestion(userMessage)) {
+      return {
+        text: isFilipino
+          ? 'Ako ang IT Help Desk Bot. Makakatulong ako sa mga tanong tungkol sa IT batay sa impormasyong mayroon ako at sa paghahanda ng support ticket. Ano ang maitutulong ko?'
+          : "I'm the IT Help Desk Bot. I can help with IT questions based on the information available to me and help prepare support tickets. What can I help you with?",
+        confidence: 0.9,
+      };
+    }
+
     const systemFacts =
       context?.systemKnowledge?.flatMap((item) => item.facts) || [];
     if (systemFacts.length > 0) {
@@ -385,7 +394,7 @@ ${JSON.stringify(conversationHistory)}`;
   }
 
   private isFilipinoMessage(message: string): boolean {
-    return /\b(?:ako|aking|amin|atin|bakit|dahil|dito|doon|gusto|hindi|ito|iyan|iyon|kailan|kami|kanila|kayo|ko|kumusta|maari|maaari|mga|mo|namin|natin|ng|niya|nito|opo|pa|paano|paki|po|puwede|pwede|sa|saan|siya|tayo|tulong|ung|yung)\b/i.test(
+    return /\b(?:ako|aking|amin|atin|bakit|dahil|dito|doon|gusto|hindi|ito|iyan|iyon|kailan|kami|kanila|kayo|ko|kumusta|maari|maaari|mga|mo|namin|natin|ng|niya|nito|opo|pa|paano|paki|po|puwede|pwede|sa|saan|sino|siya|tayo|tulong|ung|yung)\b/i.test(
       message,
     );
   }
@@ -399,17 +408,47 @@ ${JSON.stringify(conversationHistory)}`;
   } {
     const lower = userMessage.toLowerCase();
 
-    if (this.isConversationStarter(userMessage)) {
+    if (
+      this.isConversationStarter(userMessage) ||
+      this.isIdentityQuestion(userMessage)
+    ) {
       return { intent: 'GENERAL', confidence: 0.85 };
     }
 
     if (
+      /\b(?:hindi gumagana|ayaw gumana|may problema|may error|nagka-error|sira)\b/i.test(
+        lower,
+      )
+    ) {
+      return { intent: 'TROUBLESHOOTING', confidence: 0.65 };
+    }
+
+    if (
+      /\b(?:ticket|status|progress|update)\b/i.test(lower) &&
+      /\b(?:kamusta|kumusta|nasaan|status|progress|update|my|aking|ko)\b/i.test(
+        lower,
+      )
+    ) {
+      return { intent: 'TICKET_STATUS', confidence: 0.65 };
+    }
+
+    if (
+      /\b(?:gumawa|gawan|magsumite|mag-submit|magreport|mag-report)\b/i.test(
+        lower,
+      ) &&
+      /\b(?:ticket|support|issue|problema)\b/i.test(lower)
+    ) {
+      return { intent: 'TICKET_CREATION', confidence: 0.65 };
+    }
+
+    if (
       lower.includes('?') ||
+      /\b(?:paano|ano|saan|kailan|bakit|alin|puwede|pwede)\b/i.test(lower) ||
       lower.includes('how') ||
       lower.includes('what') ||
       lower.includes('where')
     ) {
-      return { intent: 'FAQ', confidence: 0.4 };
+      return { intent: 'FAQ', confidence: 0.6 };
     }
 
     if (
@@ -448,16 +487,65 @@ ${JSON.stringify(conversationHistory)}`;
     );
   }
 
-  private logGeminiFailure(operation: string, error: unknown): void {
-    const rawName = error instanceof Error ? error.name : 'UnknownError';
-    const safeName = rawName.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
-    const status =
+  private isIdentityQuestion(message: string): boolean {
+    const trimmed = message.trim();
+    return (
+      /^(?:(?:hi|hello|hey)[,!\s]*)?(?:who are you|what are you|what can you do|what do you do)\s*[?.!]*$/i.test(
+        trimmed,
+      ) ||
+      /^(?:kumusta[,!\s]*)?(?:sino ka|ano ang kaya mong gawin|ano ang maitutulong mo)\s*[?.!]*$/i.test(
+        trimmed,
+      )
+    );
+  }
+
+  private async generateContentWithRetry(prompt: string): Promise<any> {
+    const model = this.model;
+    if (!model) {
+      throw new Error('Gemini model is not initialized');
+    }
+
+    const maxRetries = 2;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await model.generateContent(prompt);
+      } catch (error) {
+        const status = this.getHttpStatus(error);
+        const retryable =
+          status === 408 ||
+          status === 429 ||
+          (status !== undefined && status >= 500 && status <= 599);
+        if (!retryable || attempt >= maxRetries) {
+          throw error;
+        }
+
+        const delayMs = 1000 * 2 ** attempt + Math.floor(Math.random() * 250);
+        this.logger.warn(
+          `Retrying Gemini request after transient HTTP ${status} (attempt ${attempt + 1}/${maxRetries})`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+
+  private getHttpStatus(error: unknown): number | undefined {
+    if (
       typeof error === 'object' &&
       error !== null &&
       'status' in error &&
       typeof error.status === 'number'
-        ? `, HTTP ${error.status}`
-        : '';
+    ) {
+      return error.status;
+    }
+
+    return undefined;
+  }
+
+  private logGeminiFailure(operation: string, error: unknown): void {
+    const rawName = error instanceof Error ? error.name : 'UnknownError';
+    const safeName = rawName.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
+    const httpStatus = this.getHttpStatus(error);
+    const status = httpStatus === undefined ? '' : `, HTTP ${httpStatus}`;
 
     this.logger.error(
       `Gemini ${operation} failed (${safeName || 'UnknownError'}${status}); using fallback behavior`,

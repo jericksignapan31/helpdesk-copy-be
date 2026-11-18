@@ -56,6 +56,20 @@ data. The root `database-schema.sql` contains the schema only (no records) for
 all 24 application tables. Run it only against a new, empty PostgreSQL database;
 it includes the `uuid-ossp` extension required by the schema.
 
+## Enable generative chatbot responses
+
+The chatbot uses Google Gemini. Add your own API key to the root `.env` file:
+
+```env
+GOOGLE_GEMINI_API_KEY=your-google-gemini-api-key
+```
+
+Restart the backend after adding the key. Without it, the chatbot uses a limited
+fallback that can only answer from matching knowledge-base entries and simple
+built-in intent rules. Do not commit `.env` or paste the API key into chat.
+When enabled, user messages and retrieved chatbot context are sent to Google's
+Gemini API; confirm this is allowed by your organization's data policies.
+
 ## Compile and run the project
 
 ```bash

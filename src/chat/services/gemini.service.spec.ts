@@ -27,6 +27,28 @@ describe('GeminiService conversational fallback', () => {
     expect(response.confidence).toBe(0.85);
   });
 
+  it('answers who the bot is when Gemini is unavailable', async () => {
+    const service = createUnavailableService();
+
+    await expect(
+      service.detectIntent('hello who are you?'),
+    ).resolves.toEqual({
+      intent: 'GENERAL',
+      confidence: 0.85,
+    });
+
+    const response = await service.generateResponse('hello who are you?');
+    expect(response.text).toContain("I'm the IT Help Desk Bot.");
+  });
+
+  it('answers identity questions in Filipino when Gemini is unavailable', async () => {
+    const service = createUnavailableService();
+
+    const response = await service.generateResponse('Sino ka?');
+
+    expect(response.text).toContain('Ako ang IT Help Desk Bot.');
+  });
+
   it('responds in Filipino to a simple Filipino help request', async () => {
     const service = createUnavailableService();
 
@@ -35,6 +57,66 @@ describe('GeminiService conversational fallback', () => {
     );
 
     expect(response.text).toContain('Oo naman!');
+  });
+
+  it('classifies Filipino how-to questions as FAQs without Gemini', async () => {
+    const service = createUnavailableService();
+
+    await expect(
+      service.detectIntent('Paano ako makakakonekta sa WiFi?'),
+    ).resolves.toEqual({
+      intent: 'FAQ',
+      confidence: 0.6,
+    });
+  });
+
+  it('classifies Filipino device failures as troubleshooting without Gemini', async () => {
+    const service = createUnavailableService();
+
+    await expect(
+      service.detectIntent('Hindi gumagana ang printer ko'),
+    ).resolves.toEqual({
+      intent: 'TROUBLESHOOTING',
+      confidence: 0.65,
+    });
+  });
+
+  it('classifies Filipino ticket requests without Gemini', async () => {
+    const service = createUnavailableService();
+
+    await expect(
+      service.detectIntent('Pwede mo ba akong gawan ng ticket?'),
+    ).resolves.toEqual({
+      intent: 'TICKET_CREATION',
+      confidence: 0.65,
+    });
+  });
+
+  it('retries a transient Gemini 503 and returns the generated answer', async () => {
+    jest.useFakeTimers();
+    try {
+      const service = createUnavailableService();
+      const generateContent = jest
+        .fn()
+        .mockRejectedValueOnce({ status: 503 })
+        .mockResolvedValueOnce({
+          response: {
+            text: () => 'Kumusta! Ano ang maitutulong ko?',
+            usageMetadata: {},
+          },
+        });
+      (service as any).isAvailable = true;
+      (service as any).model = { generateContent };
+
+      const responsePromise = service.generateResponse('hello');
+      await jest.advanceTimersByTimeAsync(2000);
+      const response = await responsePromise;
+
+      expect(generateContent).toHaveBeenCalledTimes(2);
+      expect(response.text).toBe('Kumusta! Ano ang maitutulong ko?');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('uses a natural Filipino fallback for a Filipino IT question', async () => {
