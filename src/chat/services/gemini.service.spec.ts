@@ -41,6 +41,40 @@ describe('GeminiService conversational fallback', () => {
     expect(response.text).toContain("I'm the IT Help Desk Bot.");
   });
 
+  it('does not call Gemini for a simple identity question', async () => {
+    const service = createUnavailableService();
+    const generateContent = jest.fn();
+    (service as any).isAvailable = true;
+    (service as any).model = { generateContent };
+
+    await service.detectIntent('hello who are you?');
+    const response = await service.generateResponse('hello who are you?');
+
+    expect(generateContent).not.toHaveBeenCalled();
+    expect(response.text).toContain("I'm the IT Help Desk Bot.");
+  });
+
+  it('answers language capability questions without calling Gemini', async () => {
+    const service = createUnavailableService();
+    const generateContent = jest.fn();
+    (service as any).isAvailable = true;
+    (service as any).model = { generateContent };
+
+    await expect(
+      service.detectIntent('Can you speak Tagalog?'),
+    ).resolves.toEqual({
+      intent: 'GENERAL',
+      confidence: 0.9,
+    });
+
+    const response = await service.generateResponse(
+      'Can you speak Tagalog?',
+    );
+
+    expect(generateContent).not.toHaveBeenCalled();
+    expect(response.text).toContain('Oo, kaya kong sumagot sa Tagalog.');
+  });
+
   it('answers identity questions in Filipino when Gemini is unavailable', async () => {
     const service = createUnavailableService();
 
@@ -108,7 +142,9 @@ describe('GeminiService conversational fallback', () => {
       (service as any).isAvailable = true;
       (service as any).model = { generateContent };
 
-      const responsePromise = service.generateResponse('hello');
+      const responsePromise = service.generateResponse(
+        'How do I connect to WiFi?',
+      );
       await jest.advanceTimersByTimeAsync(2000);
       const response = await responsePromise;
 
