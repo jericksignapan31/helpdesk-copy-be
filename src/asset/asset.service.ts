@@ -95,7 +95,7 @@ export class AssetService {
         FROM asset a
         LEFT JOIN brand b ON b.brand_id = a.brand_id
         LEFT JOIN branch br ON br.branch_id = a.branch_id
-        LEFT JOIN employee e ON e.employee_id::varchar = a.assigned_to
+        LEFT JOIN employee e ON e.employee_id = a.assigned_to
         WHERE a.is_deleted = false
         ORDER BY a.created_at DESC
       `);
@@ -273,7 +273,7 @@ export class AssetService {
         br.branch_id, br.branch_name, br.location, br.contact_number, br.status as branch_status, br.created_at as branch_created_at, br.updated_at as branch_updated_at,
         e.employee_id, e.branch_id as emp_branch_id, e.department_id, e.first_name, e.last_name, e.middle_name, e.email, e.role, e.position, e.contact_number as emp_contact, e.employment_status, e.created_at as emp_created_at, e.updated_at as emp_updated_at
       FROM asset a
-      INNER JOIN employee e ON e.employee_id::varchar = a.assigned_to
+      INNER JOIN employee e ON e.employee_id = a.assigned_to
       LEFT JOIN brand b ON b.brand_id = a.brand_id
       LEFT JOIN branch br ON br.branch_id = a.branch_id
       WHERE CAST(e.department_id AS text) = $1
