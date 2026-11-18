@@ -145,6 +145,20 @@ When escalating:
     userMessage: string,
     context?: GeminiContext,
   ): Promise<GeminiResponse> {
+    if (this.isLanguageCapabilityQuestion(userMessage)) {
+      return {
+        text: 'Oo, kaya kong sumagot sa Tagalog. Maaari mong itanong ang concern mo sa Tagalog—ano ang maitutulong ko?',
+        confidence: 0.9,
+      };
+    }
+
+    if (
+      this.isConversationStarter(userMessage) ||
+      this.isIdentityQuestion(userMessage)
+    ) {
+      return this.getFallbackResponse(userMessage, context);
+    }
+
     if (!this.isAvailable || !this.model) {
       this.logger.warn('Gemini API not available, using fallback response');
       return this.getFallbackResponse(userMessage, context);
@@ -185,6 +199,17 @@ When escalating:
     confidence: number;
     details?: Record<string, any>;
   }> {
+    if (this.isLanguageCapabilityQuestion(userMessage)) {
+      return { intent: 'GENERAL', confidence: 0.9 };
+    }
+
+    if (
+      this.isConversationStarter(userMessage) ||
+      this.isIdentityQuestion(userMessage)
+    ) {
+      return { intent: 'GENERAL', confidence: 0.85 };
+    }
+
     if (!this.isAvailable || !this.model) {
       return this.detectIntentFallback(userMessage);
     }
@@ -494,6 +519,24 @@ ${JSON.stringify(conversationHistory)}`;
         trimmed,
       ) ||
       /^(?:kumusta[,!\s]*)?(?:sino ka|ano ang kaya mong gawin|ano ang maitutulong mo)\s*[?.!]*$/i.test(
+        trimmed,
+      )
+    );
+  }
+
+  private isLanguageCapabilityQuestion(message: string): boolean {
+    const trimmed = message.trim();
+    return (
+      /^(?:can|could|do)\s+you\s+(?:speak|understand)\s+(?:tagalog|filipino)\s*[?.!]*$/i.test(
+        trimmed,
+      ) ||
+      /^(?:can|could)\s+you\s+(?:respond|answer)\s+in\s+(?:tagalog|filipino)\s*[?.!]*$/i.test(
+        trimmed,
+      ) ||
+      /^(?:speak|respond|answer)\s+(?:in\s+)?(?:tagalog|filipino)\s*[?.!]*$/i.test(
+        trimmed,
+      ) ||
+      /^(?:marunong ka bang magsalita ng|nakakapagsalita ka ba ng)\s+(?:tagalog|filipino)\s*[?.!]*$/i.test(
         trimmed,
       )
     );
